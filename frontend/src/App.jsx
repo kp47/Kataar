@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Landing from './pages/Landing';
 import BrowseVendors from './pages/BrowseVendors';
 import QueuePage from './pages/patient/QueuePage';
-import VerifyMagicLink from './pages/patient/VerifyMagicLink';
 import VendorSignup from './pages/vendor/VendorSignup';
 import VendorLogin from './pages/vendor/VendorLogin';
 import AdminPanel from './pages/vendor/AdminPanel';
@@ -23,7 +22,6 @@ export default function App() {
     <Routes>
       <Route path="/" element={<BrowseVendors />} />
       <Route path="/for-business" element={<Landing />} />
-      <Route path="/verify" element={<VerifyMagicLink />} />
       <Route path="/q/:vendorSlug" element={<QueuePage />} />
       <Route path="/board/:vendorSlug" element={<PublicBoard />} />
 

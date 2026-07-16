@@ -19,23 +19,23 @@ function verifySession(token) {
   }
 }
 
-// ---- Magic link one-time tokens ----
-// We generate a random opaque token, send the raw value in the email link,
-// and store only its hash in the DB so a DB leak can't be used to log in.
+// ---- Email OTP codes ----
+// We generate a short numeric code, email it to the user, and store only its
+// hash in the DB so a DB leak can't be used to sign in as someone else.
 
-function generateMagicLinkToken() {
-  const raw = crypto.randomBytes(32).toString('hex');
-  const hash = crypto.createHmac('sha256', MAGIC_LINK_SECRET).update(raw).digest('hex');
-  return { raw, hash };
+function generateOtp() {
+  const code = crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+  const hash = crypto.createHmac('sha256', MAGIC_LINK_SECRET).update(code).digest('hex');
+  return { code, hash };
 }
 
-function hashMagicLinkToken(raw) {
-  return crypto.createHmac('sha256', MAGIC_LINK_SECRET).update(raw).digest('hex');
+function hashOtp(code) {
+  return crypto.createHmac('sha256', MAGIC_LINK_SECRET).update(code).digest('hex');
 }
 
 module.exports = {
   signSession,
   verifySession,
-  generateMagicLinkToken,
-  hashMagicLinkToken,
+  generateOtp,
+  hashOtp,
 };

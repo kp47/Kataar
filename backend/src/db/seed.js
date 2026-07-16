@@ -131,10 +131,11 @@ async function seedPastDay(conn, vendorId, daysAgo, tokenCount) {
 async function seedToday(conn, vendorId, { served, waitingWithFlags = false }) {
   const today = new Date();
   const totalSoFar = served + 1; // + the one currently called
+  const waitingCount = 5; // must match the waiting-token loop below
   const [sessionResult] = await conn.query(
     `INSERT INTO queue_sessions (vendor_id, session_date, status, current_token_number, next_token_number)
      VALUES (?, ?, 'open', ?, ?)`,
-    [vendorId, dateString(today), totalSoFar, totalSoFar + 1]
+    [vendorId, dateString(today), totalSoFar, totalSoFar + waitingCount + 1]
   );
   const sessionId = sessionResult.insertId;
 
@@ -161,7 +162,6 @@ async function seedToday(conn, vendorId, { served, waitingWithFlags = false }) {
   );
 
   // A handful waiting behind them.
-  const waitingCount = 5;
   for (let j = 1; j <= waitingCount; j += 1) {
     const tokenNumber = calledNumber + j;
     const pushUsed = waitingWithFlags && j === 3 ? 1 : 0;

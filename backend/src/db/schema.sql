@@ -87,12 +87,12 @@ CREATE TABLE tokens (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------------
--- MAGIC LINKS (passwordless patient auth)
+-- MAGIC LINKS (passwordless patient auth — stores hashed one-time OTP codes)
 -- ---------------------------------------------------------------------------
 CREATE TABLE magic_links (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   email       VARCHAR(255) NOT NULL,
-  token_hash  VARCHAR(255) NOT NULL,
+  token_hash  VARCHAR(255) NOT NULL,   -- HMAC hash of the 6-digit OTP code
   purpose     ENUM('patient_login') NOT NULL DEFAULT 'patient_login',
   expires_at  DATETIME NOT NULL,
   used_at     DATETIME NULL,

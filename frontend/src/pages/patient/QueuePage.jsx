@@ -20,14 +20,15 @@ const STATUS_LABEL = {
 
 export default function QueuePage() {
   const { vendorSlug } = useParams();
-  const { patient, loading: authLoading } = usePatientAuth();
+  const { patient, loading: authLoading, refresh } = usePatientAuth();
 
   const [vendorInfo, setVendorInfo] = useState(null);
   const [vendorError, setVendorError] = useState('');
 
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [linkSent, setLinkSent] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -97,7 +98,7 @@ export default function QueuePage() {
     return () => socket.off(eventName, handler);
   }, [status?.token?.id]);
 
-  const requestLink = async (e) => {
+  const requestOtp = async (e) => {
     e.preventDefault();
     setFormError('');
     if (!EMAIL_RE.test(email)) {
@@ -106,8 +107,26 @@ export default function QueuePage() {
     }
     setSubmitting(true);
     try {
-      await api.post('/auth/request-link', { email, vendorSlug });
-      setLinkSent(true);
+      await api.post('/auth/request-otp', { email, vendorSlug });
+      setOtpSent(true);
+    } catch (err) {
+      setFormError(extractErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const verifyOtp = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    if (!code.trim()) {
+      setFormError('Please enter the 6-digit code.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post('/auth/verify-otp', { email, code: code.trim() });
+      await refresh();
     } catch (err) {
       setFormError(extractErrorMessage(err));
     } finally {
@@ -173,13 +192,44 @@ export default function QueuePage() {
           </p>
         ) : !patient ? (
           <div className="card" style={{ marginTop: 24 }}>
-            {linkSent ? (
-              <div className="success-banner">
-                Check <strong>{email}</strong> for a sign-in link. It expires in 15 minutes — tap it
-                on this device to continue.
-              </div>
+            {otpSent ? (
+              <form className="stack" onSubmit={verifyOtp}>
+                <div className="success-banner">
+                  We sent a 6-digit code to <strong>{email}</strong>. It expires in 10 minutes.
+                </div>
+                <div className="field">
+                  <label htmlFor="code">Verification code</label>
+                  <input
+                    id="code"
+                    className="input"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                    autoFocus
+                  />
+                </div>
+                {formError && <p className="error-text">{formError}</p>}
+                <button className="btn btn-primary btn-block btn-lg" disabled={submitting}>
+                  {submitting ? 'Verifying…' : 'Verify & continue'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-block"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setCode('');
+                    setFormError('');
+                  }}
+                >
+                  Use a different email
+                </button>
+              </form>
             ) : (
-              <form className="stack" onSubmit={requestLink}>
+              <form className="stack" onSubmit={requestOtp}>
                 <div className="field">
                   <label htmlFor="email">Email address</label>
                   <input
@@ -194,7 +244,7 @@ export default function QueuePage() {
                 </div>
                 {formError && <p className="error-text">{formError}</p>}
                 <button className="btn btn-primary btn-block btn-lg" disabled={submitting}>
-                  {submitting ? 'Sending…' : 'Email me a sign-in link'}
+                  {submitting ? 'Sending…' : 'Email me a verification code'}
                 </button>
                 <p className="muted" style={{ fontSize: 13 }}>
                   No password needed. We'll only use this to send you queue updates.
