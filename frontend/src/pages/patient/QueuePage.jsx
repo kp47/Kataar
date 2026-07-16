@@ -38,13 +38,18 @@ export default function QueuePage() {
 
   const pollRef = useRef(null);
 
-  // Vendor info (name, hours) — public, no auth needed.
-  useEffect(() => {
-    api
+  // Vendor info (name always shown; the live queue snapshot inside it is only
+  // rendered to the customer once they've verified their email — see below).
+  const fetchVendorInfo = useCallback(() => {
+    return api
       .get(`/public/${vendorSlug}/info`)
       .then(({ data }) => setVendorInfo(data.vendor))
       .catch((err) => setVendorError(extractErrorMessage(err)));
   }, [vendorSlug]);
+
+  useEffect(() => {
+    fetchVendorInfo();
+  }, [fetchVendorInfo]);
 
   const fetchMyToken = useCallback(async () => {
     if (!patient) return;
@@ -62,20 +67,25 @@ export default function QueuePage() {
   }, [patient, fetchMyToken]);
 
   // Live updates via socket, with a light poll fallback every 20s in case a socket event is missed.
+  // Once verified, this also keeps the live counter (now serving / waiting) fresh while the
+  // customer decides whether to get a token.
   useEffect(() => {
     if (!patient) return undefined;
     const socket = getSocket();
     socket.emit('join-vendor-room', vendorSlug);
-    const onUpdate = () => fetchMyToken();
+    const onUpdate = () => {
+      fetchMyToken();
+      fetchVendorInfo();
+    };
     socket.on('queue-update', onUpdate);
 
-    pollRef.current = setInterval(fetchMyToken, 20000);
+    pollRef.current = setInterval(onUpdate, 20000);
     return () => {
       socket.off('queue-update', onUpdate);
       socket.emit('leave-vendor-room', vendorSlug);
       clearInterval(pollRef.current);
     };
-  }, [patient, vendorSlug, fetchMyToken]);
+  }, [patient, vendorSlug, fetchMyToken, fetchVendorInfo]);
 
   // Personal push notification channel once we know our token id.
   useEffect(() => {
@@ -195,21 +205,48 @@ export default function QueuePage() {
         ) : status?.token ? (
           <TokenDashboard status={status} onPush={pushBack} pushing={pushing} actionMessage={actionMessage} />
         ) : (
-          <div className="card stack" style={{ marginTop: 24 }}>
-            <p className="muted">You're signed in as {patient.email}.</p>
-            <div className="field">
-              <label htmlFor="name">Your name (optional, helps the front desk)</label>
-              <input id="name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="stack" style={{ marginTop: 24 }}>
+            {vendorInfo?.openToday && <VendorQueueSnapshot vendor={vendorInfo} />}
+            <div className="card stack">
+              <p className="muted">You're signed in as {patient.email}.</p>
+              <div className="field">
+                <label htmlFor="name">Your name (optional, helps the front desk)</label>
+                <input id="name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              {formError && <p className="error-text">{formError}</p>}
+              <button className="btn btn-primary btn-block btn-lg" onClick={getToken} disabled={submitting}>
+                {submitting ? 'Getting your token…' : 'Get my token'}
+              </button>
             </div>
-            {formError && <p className="error-text">{formError}</p>}
-            <button className="btn btn-primary btn-block btn-lg" onClick={getToken} disabled={submitting}>
-              {submitting ? 'Getting your token…' : 'Get my token'}
-            </button>
           </div>
         )}
 
         {statusError && <p className="error-text" style={{ marginTop: 16 }}>{statusError}</p>}
       </div>
+    </div>
+  );
+}
+
+function VendorQueueSnapshot({ vendor }) {
+  const started = vendor.sessionStatus !== null && vendor.sessionStatus !== undefined;
+  return (
+    <div className="card">
+      <div className="eyebrow">Live queue</div>
+      <div className="grid-2" style={{ marginTop: 12, textAlign: 'left' }}>
+        <div className="stat-card">
+          <div className="stat-number">{started ? vendor.nowServing ?? '—' : '—'}</div>
+          <div className="stat-label">Now serving</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-number">{vendor.waitingCount}</div>
+          <div className="stat-label">Waiting</div>
+        </div>
+      </div>
+      <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+        Estimated wait for a new token:{' '}
+        <strong>{vendor.estimatedWaitMinutes != null ? `~${vendor.estimatedWaitMinutes} min` : '—'}</strong>
+        {vendor.sessionStatus === 'paused' && ' (queue is currently paused)'}
+      </p>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, extractErrorMessage } from '../api/client';
-import FlipNumber from '../components/FlipNumber';
 
 export default function BrowseVendors() {
   const navigate = useNavigate();
@@ -47,7 +46,7 @@ export default function BrowseVendors() {
         <div className="eyebrow">Find a queue</div>
         <h1 style={{ fontSize: 28, marginTop: 6 }}>Pick where you're headed</h1>
         <p className="muted" style={{ marginTop: 6 }}>
-          See the live number and estimated wait before you leave the house.
+          Pick a business, verify your email, then see the live number and get your token.
         </p>
 
         <div className="row" style={{ marginTop: 24, flexWrap: 'wrap' }}>
@@ -95,7 +94,6 @@ export default function BrowseVendors() {
 }
 
 function VendorCard({ vendor, onSelect }) {
-  const started = vendor.sessionStatus !== null && vendor.sessionStatus !== undefined;
   return (
     <div className="card row-between" style={{ flexWrap: 'wrap', gap: 16 }}>
       <div style={{ minWidth: 220 }}>
@@ -114,29 +112,8 @@ function VendorCard({ vendor, onSelect }) {
         </p>
       </div>
 
-      {vendor.openToday && (
-        <div className="row" style={{ gap: 24 }}>
-          <div style={{ textAlign: 'center' }}>
-            <FlipNumber value={started ? vendor.nowServing : null} size="small" />
-            <div className="stat-label">Now serving</div>
-          </div>
-          <div style={{ textAlign: 'center', minWidth: 90 }}>
-            <div className="stat-number" style={{ fontSize: 20 }}>
-              {vendor.waitingCount}
-            </div>
-            <div className="stat-label">Waiting</div>
-          </div>
-          <div style={{ textAlign: 'center', minWidth: 90 }}>
-            <div className="stat-number" style={{ fontSize: 20 }}>
-              {vendor.estimatedWaitMinutes != null ? `~${vendor.estimatedWaitMinutes}m` : '—'}
-            </div>
-            <div className="stat-label">Est. wait for a new token</div>
-          </div>
-        </div>
-      )}
-
       <button className="btn btn-primary" onClick={onSelect} disabled={!vendor.openToday}>
-        {vendor.openToday ? 'Get token' : 'Closed today'}
+        {vendor.openToday ? 'View queue' : 'Closed today'}
       </button>
     </div>
   );

@@ -86,16 +86,43 @@ router.get('/categories', async (req, res) => {
   res.json({ categories: rows.map((r) => r.category) });
 });
 
-/** GET /api/public/:vendorSlug/info — basic info shown before sign-in (name, hours, today's status) */
+/**
+ * GET /api/public/:vendorSlug/info — vendor info plus a live queue snapshot.
+ * The route itself needs no auth (it's a simple lookup), but the frontend only
+ * reveals the live snapshot fields (nowServing/waitingCount/estimatedWaitMinutes)
+ * to the customer after they've verified their email — pre-verification they only
+ * see the vendor's name/category, matching the "vendors first, counter after
+ * verification" flow.
+ */
 router.get('/:vendorSlug/info', async (req, res) => {
   const [[vendor]] = await pool.query(
-    `SELECT v.id, v.business_name, v.slug, v.category, v.city, s.open_time, s.close_time, s.operational_days
+    `SELECT v.id, v.business_name, v.slug, v.category, v.city, s.open_time, s.close_time, s.operational_days, s.default_wait_minutes
      FROM vendors v JOIN vendor_settings s ON s.vendor_id = v.id
      WHERE v.slug = ? AND v.is_active = 1`,
     [req.params.vendorSlug]
   );
   if (!vendor) return res.status(404).json({ error: 'This business could not be found.' });
   vendor.operational_days = typeof vendor.operational_days === 'string' ? JSON.parse(vendor.operational_days) : vendor.operational_days;
+
+  const openToday = operatesToday(vendor.operational_days);
+  vendor.openToday = openToday;
+  if (openToday) {
+    const snapshot = await getTodayLiveSnapshot(vendor.id);
+    const { minutesPerToken } = snapshot.sessionId
+      ? await getEffectiveWaitMinutes(snapshot.sessionId, vendor.default_wait_minutes)
+      : { minutesPerToken: vendor.default_wait_minutes };
+    vendor.sessionStatus = snapshot.sessionStatus;
+    vendor.nowServing = snapshot.nowServing;
+    vendor.waitingCount = snapshot.waitingCount;
+    vendor.minutesPerToken = minutesPerToken;
+    vendor.estimatedWaitMinutes = Math.round(snapshot.waitingCount * minutesPerToken);
+  } else {
+    vendor.sessionStatus = null;
+    vendor.nowServing = null;
+    vendor.waitingCount = 0;
+    vendor.estimatedWaitMinutes = null;
+  }
+
   res.json({ vendor });
 });
 
