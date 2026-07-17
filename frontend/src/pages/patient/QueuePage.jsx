@@ -40,7 +40,7 @@ export default function QueuePage() {
   const pollRef = useRef(null);
 
   // Vendor info (name always shown; the live queue snapshot inside it is only
-  // rendered to the customer once they've verified their email — see below).
+  // rendered to the customer once they can access the queue — see canAccessQueue below).
   const fetchVendorInfo = useCallback(() => {
     return api
       .get(`/public/${vendorSlug}/info`)
@@ -52,8 +52,15 @@ export default function QueuePage() {
     fetchVendorInfo();
   }, [fetchVendorInfo]);
 
+  // Vendors can turn off email verification entirely — then anyone can get a
+  // token with one tap, tracked by an anonymous per-browser device cookie
+  // instead of a signed-in session.
+  const openMode = vendorInfo ? !vendorInfo.requireVerification : false;
+  const canAccessQueue = !!patient || openMode;
+  const pageLoading = authLoading || !vendorInfo;
+
   const fetchMyToken = useCallback(async () => {
-    if (!patient) return;
+    if (!canAccessQueue) return;
     try {
       const { data } = await api.get(`/queue/${vendorSlug}/my-token`);
       setStatus(data);
@@ -61,17 +68,17 @@ export default function QueuePage() {
     } catch (err) {
       setStatusError(extractErrorMessage(err));
     }
-  }, [patient, vendorSlug]);
+  }, [canAccessQueue, vendorSlug]);
 
   useEffect(() => {
-    if (patient) fetchMyToken();
-  }, [patient, fetchMyToken]);
+    if (canAccessQueue) fetchMyToken();
+  }, [canAccessQueue, fetchMyToken]);
 
   // Live updates via socket, with a light poll fallback every 20s in case a socket event is missed.
-  // Once verified, this also keeps the live counter (now serving / waiting) fresh while the
-  // customer decides whether to get a token.
+  // Also keeps the live counter (now serving / waiting) fresh while the customer decides
+  // whether to get a token.
   useEffect(() => {
-    if (!patient) return undefined;
+    if (!canAccessQueue) return undefined;
     const socket = getSocket();
     socket.emit('join-vendor-room', vendorSlug);
     const onUpdate = () => {
@@ -86,7 +93,7 @@ export default function QueuePage() {
       socket.emit('leave-vendor-room', vendorSlug);
       clearInterval(pollRef.current);
     };
-  }, [patient, vendorSlug, fetchMyToken, fetchVendorInfo]);
+  }, [canAccessQueue, vendorSlug, fetchMyToken, fetchVendorInfo]);
 
   // Personal push notification channel once we know our token id.
   useEffect(() => {
@@ -107,7 +114,7 @@ export default function QueuePage() {
     }
     setSubmitting(true);
     try {
-      await api.post('/auth/request-otp', { email, vendorSlug });
+      await api.post('/auth/request-otp', { email, name: name.trim() || undefined, vendorSlug });
       setOtpSent(true);
     } catch (err) {
       setFormError(extractErrorMessage(err));
@@ -125,7 +132,7 @@ export default function QueuePage() {
     }
     setSubmitting(true);
     try {
-      await api.post('/auth/verify-otp', { email, code: code.trim() });
+      await api.post('/auth/verify-otp', { email, code: code.trim(), name: name.trim() || undefined });
       await refresh();
     } catch (err) {
       setFormError(extractErrorMessage(err));
@@ -138,7 +145,7 @@ export default function QueuePage() {
     setFormError('');
     setSubmitting(true);
     try {
-      const { data } = await api.post(`/queue/${vendorSlug}/token`, { name: name || undefined });
+      const { data } = await api.post(`/queue/${vendorSlug}/token`);
       setStatus(data);
     } catch (err) {
       setFormError(extractErrorMessage(err));
@@ -186,11 +193,11 @@ export default function QueuePage() {
         <div className="eyebrow">{vendorInfo ? vendorInfo.business_name : 'Loading…'}</div>
         <h1 style={{ fontSize: 26, marginTop: 6 }}>Get your token</h1>
 
-        {authLoading ? (
+        {pageLoading ? (
           <p className="muted" style={{ marginTop: 24 }}>
             Loading…
           </p>
-        ) : !patient ? (
+        ) : !canAccessQueue ? (
           <div className="card" style={{ marginTop: 24 }}>
             {otpSent ? (
               <form className="stack" onSubmit={verifyOtp}>
@@ -242,12 +249,22 @@ export default function QueuePage() {
                     autoFocus
                   />
                 </div>
+                <div className="field">
+                  <label htmlFor="name">Your name (first time only, optional)</label>
+                  <input
+                    id="name"
+                    className="input"
+                    placeholder="So we can greet you at the counter"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
                 {formError && <p className="error-text">{formError}</p>}
                 <button className="btn btn-primary btn-block btn-lg" disabled={submitting}>
                   {submitting ? 'Sending…' : 'Email me a verification code'}
                 </button>
                 <p className="muted" style={{ fontSize: 13 }}>
-                  No password needed. We'll only use this to send you queue updates.
+                  No password needed. Once you've verified once, you won't be asked again at any business.
                 </p>
               </form>
             )}
@@ -258,11 +275,14 @@ export default function QueuePage() {
           <div className="stack" style={{ marginTop: 24 }}>
             {vendorInfo?.openToday && <VendorQueueSnapshot vendor={vendorInfo} />}
             <div className="card stack">
-              <p className="muted">You're signed in as {patient.email}.</p>
-              <div className="field">
-                <label htmlFor="name">Your name (optional, helps the front desk)</label>
-                <input id="name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
+              {patient ? (
+                <p className="muted">
+                  You're signed in as {patient.email}
+                  {patient.name ? ` (${patient.name})` : ''}.
+                </p>
+              ) : (
+                <p className="muted">No sign-in needed here — just get your token.</p>
+              )}
               {formError && <p className="error-text">{formError}</p>}
               <button className="btn btn-primary btn-block btn-lg" onClick={getToken} disabled={submitting}>
                 {submitting ? 'Getting your token…' : 'Get my token'}

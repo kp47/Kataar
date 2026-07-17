@@ -54,10 +54,11 @@ router.post('/request-otp', requestLimiter, async (req, res) => {
 
 /**
  * POST /api/auth/verify-otp
- * body: { email, code }
+ * body: { email, code, name? } — name is only used the first time (registration);
+ * once a patient has a saved name, later logins never need to ask again.
  */
 router.post('/verify-otp', verifyLimiter, async (req, res) => {
-  const { email, code } = req.body || {};
+  const { email, code, name } = req.body || {};
   if (!email || !code) return res.status(400).json({ error: 'Missing email or code.' });
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -75,7 +76,15 @@ router.post('/verify-otp', verifyLimiter, async (req, res) => {
 
   await pool.query(`UPDATE magic_links SET used_at = NOW() WHERE id = ?`, [otp.id]);
 
-  const session = signSession({ type: 'patient', email: otp.email }, '30d');
+  const trimmedName = name?.trim() || null;
+  await pool.query(
+    `INSERT INTO patients (email, name) VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE name = COALESCE(?, name)`,
+    [otp.email, trimmedName, trimmedName]
+  );
+  const [[patient]] = await pool.query(`SELECT name FROM patients WHERE email = ?`, [otp.email]);
+
+  const session = signSession({ type: 'patient', email: otp.email, name: patient.name }, '30d');
   res.cookie('qw_patient_session', session, {
     httpOnly: true,
     sameSite: 'lax',
@@ -83,7 +92,7 @@ router.post('/verify-otp', verifyLimiter, async (req, res) => {
     maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 
-  res.json({ email: otp.email });
+  res.json({ email: otp.email, name: patient.name });
 });
 
 router.get('/me', attachPatient, (req, res) => {

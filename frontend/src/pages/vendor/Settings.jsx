@@ -23,7 +23,8 @@ export default function Settings() {
   }, []);
 
   const update = (key) => (e) => {
-    const value = e.target.type === 'number' ? Number(e.target.value) : e.target.value;
+    const value =
+      e.target.type === 'number' ? Number(e.target.value) : e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setSettings((s) => ({ ...s, [key]: value }));
     setSaved(false);
   };
@@ -62,6 +63,23 @@ export default function Settings() {
   return (
     <VendorLayout>
       <form className="stack" style={{ maxWidth: 640 }} onSubmit={save}>
+        <div className="card stack">
+          <h3 style={{ fontSize: 15 }}>Patient sign-in</h3>
+          <label className="row" style={{ gap: 10, alignItems: 'center', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={!!settings.require_verification}
+              onChange={update('require_verification')}
+            />
+            <span>Require email verification before a patient can get a token</span>
+          </label>
+          <p className="muted" style={{ fontSize: 13 }}>
+            {settings.require_verification
+              ? 'Patients verify a 6-digit code sent to their email before getting a token.'
+              : "Off: anyone can tap \"Get token\" instantly, no email needed. We'll remember their token on that device instead."}
+          </p>
+        </div>
+
         <div className="card stack">
           <h3 style={{ fontSize: 15 }}>Operational days &amp; hours</h3>
           <div className="row" style={{ flexWrap: 'wrap' }}>

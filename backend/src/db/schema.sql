@@ -38,6 +38,7 @@ CREATE TABLE vendor_settings (
   expiry_hours              DECIMAL(4,1) NOT NULL DEFAULT 2.0,       -- used when expiry_policy = fixed_hours
   grace_window_minutes      SMALLINT UNSIGNED NOT NULL DEFAULT 3,    -- time to respond once called before auto-skip
   push_bump_positions       SMALLINT UNSIGNED NOT NULL DEFAULT 4,    -- how many places you drop when you push
+  require_verification      TINYINT(1) NOT NULL DEFAULT 1,           -- if 0, patients get a token with no email/OTP at all
   updated_at                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_vendor FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -98,6 +99,16 @@ CREATE TABLE magic_links (
   used_at     DATETIME NULL,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY idx_email (email)
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------------
+-- PATIENTS (remembers a verified patient's name so we don't ask again)
+-- ---------------------------------------------------------------------------
+CREATE TABLE patients (
+  email       VARCHAR(255) NOT NULL PRIMARY KEY,
+  name        VARCHAR(150) NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------------

@@ -1,7 +1,41 @@
+const crypto = require('crypto');
 const { pool } = require('../config/db');
 const { getOrCreateTodaySession, computeExpiry } = require('../utils/sessionHelper');
 const { getEffectiveWaitMinutes } = require('../utils/estimator');
 const { emitQueueUpdate, emitPatientNotification } = require('../sockets');
+
+const DEVICE_COOKIE = 'qw_device';
+const DEVICE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Resolves who's making this request. Vendors that require email verification
+ * need a signed-in patient session; vendors that don't fall back to an
+ * anonymous per-browser device id (no email/OTP involved at all), stored in
+ * the `patient_email` column as a synthetic `device:<uuid>` identity so the
+ * rest of the queue logic (dedupe, "my token" lookup, push ownership) doesn't
+ * need to know the difference. Returns null if there's no identity to use —
+ * `mint` controls whether a missing device cookie should be created (true for
+ * token creation, false for read-only checks, so polling doesn't hand out
+ * cookies to visitors who've never gotten a token).
+ */
+function resolveIdentity(req, res, requireVerification, { mint = false } = {}) {
+  if (requireVerification) {
+    return req.patient ? { email: req.patient.email, name: req.patient.name || null } : null;
+  }
+
+  let deviceId = req.cookies?.[DEVICE_COOKIE];
+  if (!deviceId) {
+    if (!mint) return null;
+    deviceId = crypto.randomUUID();
+    res.cookie(DEVICE_COOKIE, deviceId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: DEVICE_COOKIE_MAX_AGE,
+    });
+  }
+  return { email: `device:${deviceId}`, name: null };
+}
 
 /** Re-persists queue_position as a clean 1..N sequence for a given ordered list of token ids. */
 async function persistOrder(conn, orderedIds) {
@@ -46,14 +80,21 @@ async function buildStatusPayload(session, token) {
   };
 }
 
-/** POST /api/queue/:vendorSlug/token — create a new token for the signed-in patient. */
+/** POST /api/queue/:vendorSlug/token — create a new token for the current patient. */
 async function createToken(req, res) {
   const { vendorSlug } = req.params;
-  const patientEmail = req.patient.email;
-  const patientName = req.body?.name?.trim() || null;
 
-  const [[vendorRow]] = await pool.query(`SELECT id FROM vendors WHERE slug = ? AND is_active = 1`, [vendorSlug]);
+  const [[vendorRow]] = await pool.query(
+    `SELECT v.id, vs.require_verification FROM vendors v JOIN vendor_settings vs ON vs.vendor_id = v.id
+     WHERE v.slug = ? AND v.is_active = 1`,
+    [vendorSlug]
+  );
   if (!vendorRow) return res.status(404).json({ error: 'This business could not be found.' });
+
+  const identity = resolveIdentity(req, res, !!vendorRow.require_verification, { mint: true });
+  if (!identity) return res.status(401).json({ error: 'Please sign in to continue.' });
+  const patientEmail = identity.email;
+  const patientName = identity.name;
 
   const { vendor, session, closedToday } = await getOrCreateTodaySession(vendorRow.id);
   if (closedToday) return res.status(400).json({ error: `${vendor.business_name} is closed today.` });
@@ -100,13 +141,19 @@ async function createToken(req, res) {
   }
 }
 
-/** GET /api/queue/:vendorSlug/my-token — current token status for the signed-in patient. */
+/** GET /api/queue/:vendorSlug/my-token — current token status for the current patient. */
 async function getMyToken(req, res) {
   const { vendorSlug } = req.params;
-  const patientEmail = req.patient.email;
 
-  const [[vendor]] = await pool.query(`SELECT id FROM vendors WHERE slug = ?`, [vendorSlug]);
+  const [[vendor]] = await pool.query(
+    `SELECT v.id, vs.require_verification FROM vendors v JOIN vendor_settings vs ON vs.vendor_id = v.id WHERE v.slug = ?`,
+    [vendorSlug]
+  );
   if (!vendor) return res.status(404).json({ error: 'This business could not be found.' });
+
+  const identity = resolveIdentity(req, res, !!vendor.require_verification, { mint: false });
+  if (!identity) return res.json({ token: null, queue: null });
+  const patientEmail = identity.email;
 
   const { session } = await getOrCreateTodaySession(vendor.id);
   if (!session) return res.json({ token: null, queue: null });
@@ -125,14 +172,23 @@ async function getMyToken(req, res) {
 /** POST /api/queue/:vendorSlug/token/:tokenId/push — one-time bounded push-back. */
 async function pushToken(req, res) {
   const { vendorSlug, tokenId } = req.params;
-  const patientEmail = req.patient.email;
 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
     const [[token]] = await conn.query(`SELECT * FROM tokens WHERE id = ? FOR UPDATE`, [tokenId]);
-    if (!token || token.patient_email !== patientEmail) {
+    if (!token) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Token not found.' });
+    }
+
+    const [[settings]] = await conn.query(
+      `SELECT require_verification, push_bump_positions FROM vendor_settings WHERE vendor_id = ?`,
+      [token.vendor_id]
+    );
+    const identity = resolveIdentity(req, res, !!settings.require_verification, { mint: false });
+    if (!identity || token.patient_email !== identity.email) {
       await conn.rollback();
       return res.status(404).json({ error: 'Token not found.' });
     }
@@ -145,7 +201,6 @@ async function pushToken(req, res) {
       return res.status(400).json({ error: 'You have already used your one push for this token.' });
     }
 
-    const [[settings]] = await conn.query(`SELECT push_bump_positions FROM vendor_settings WHERE vendor_id = ?`, [token.vendor_id]);
     const bump = settings.push_bump_positions;
 
     const [waitingList] = await conn.query(

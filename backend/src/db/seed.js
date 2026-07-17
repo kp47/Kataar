@@ -30,6 +30,7 @@ const DEMO_VENDORS = [
     defaultWaitMinutes: 20,
     dailyCapacity: 30,
     seedHistory: false,
+    requireVerification: false, // demos the open/no-OTP flow
   },
   {
     businessName: 'Metro Bank Branch',
@@ -79,9 +80,9 @@ async function upsertVendor(conn, v) {
 
   await conn.query(
     `INSERT INTO vendor_settings (vendor_id, operational_days, open_time, close_time, default_wait_minutes,
-      daily_capacity, expiry_policy, expiry_hours, grace_window_minutes, push_bump_positions)
-     VALUES (?, ?, '09:00:00', '18:00:00', ?, ?, 'fixed_hours', 2.0, 3, 4)`,
-    [vendorId, JSON.stringify(ALL_DAYS), v.defaultWaitMinutes, v.dailyCapacity]
+      daily_capacity, expiry_policy, expiry_hours, grace_window_minutes, push_bump_positions, require_verification)
+     VALUES (?, ?, '09:00:00', '18:00:00', ?, ?, 'fixed_hours', 2.0, 3, 4, ?)`,
+    [vendorId, JSON.stringify(ALL_DAYS), v.defaultWaitMinutes, v.dailyCapacity, v.requireVerification === false ? 0 : 1]
   );
 
   return vendorId;

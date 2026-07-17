@@ -26,7 +26,8 @@ router.get('/vendors', async (req, res) => {
   }
 
   const [vendors] = await pool.query(
-    `SELECT v.id, v.business_name, v.slug, v.category, v.city, s.operational_days, s.open_time, s.close_time, s.default_wait_minutes
+    `SELECT v.id, v.business_name, v.slug, v.category, v.city, s.operational_days, s.open_time, s.close_time,
+            s.default_wait_minutes, s.require_verification
      FROM vendors v JOIN vendor_settings s ON s.vendor_id = v.id
      WHERE ${clauses.join(' AND ')}
      ORDER BY v.business_name ASC
@@ -47,6 +48,7 @@ router.get('/vendors', async (req, res) => {
           category: v.category,
           city: v.city,
           openToday: false,
+          requireVerification: !!v.require_verification,
           nowServing: null,
           waitingCount: 0,
           estimatedWaitMinutes: null,
@@ -64,6 +66,7 @@ router.get('/vendors', async (req, res) => {
         category: v.category,
         city: v.city,
         openToday: true,
+        requireVerification: !!v.require_verification,
         sessionStatus: snapshot.sessionStatus, // null until the vendor's first token of the day
         nowServing: snapshot.nowServing,
         waitingCount: snapshot.waitingCount,
@@ -96,13 +99,15 @@ router.get('/categories', async (req, res) => {
  */
 router.get('/:vendorSlug/info', async (req, res) => {
   const [[vendor]] = await pool.query(
-    `SELECT v.id, v.business_name, v.slug, v.category, v.city, s.open_time, s.close_time, s.operational_days, s.default_wait_minutes
+    `SELECT v.id, v.business_name, v.slug, v.category, v.city, s.open_time, s.close_time, s.operational_days,
+            s.default_wait_minutes, s.require_verification
      FROM vendors v JOIN vendor_settings s ON s.vendor_id = v.id
      WHERE v.slug = ? AND v.is_active = 1`,
     [req.params.vendorSlug]
   );
   if (!vendor) return res.status(404).json({ error: 'This business could not be found.' });
   vendor.operational_days = typeof vendor.operational_days === 'string' ? JSON.parse(vendor.operational_days) : vendor.operational_days;
+  vendor.requireVerification = !!vendor.require_verification;
 
   const openToday = operatesToday(vendor.operational_days);
   vendor.openToday = openToday;

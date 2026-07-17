@@ -27,6 +27,7 @@ router.put('/settings', async (req, res) => {
     expiry_hours,
     grace_window_minutes,
     push_bump_positions,
+    require_verification,
     timezone,
   } = req.body || {};
 
@@ -55,6 +56,7 @@ router.put('/settings', async (req, res) => {
     expiry_hours,
     grace_window_minutes,
     push_bump_positions,
+    require_verification: require_verification === undefined ? undefined : require_verification ? 1 : 0,
     timezone,
   };
   const entries = Object.entries(fields).filter(([, v]) => v !== undefined);
