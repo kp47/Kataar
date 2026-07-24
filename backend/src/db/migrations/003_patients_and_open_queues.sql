@@ -1,6 +1,6 @@
 -- Run this ONLY if you already executed schema.sql once before. If you
 -- haven't deployed yet, ignore this file — schema.sql already includes these.
-USE queuewise;
+USE u281498814_queueit;
 
 CREATE TABLE IF NOT EXISTS patients (
   email       VARCHAR(255) NOT NULL PRIMARY KEY,
