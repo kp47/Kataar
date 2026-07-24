@@ -1,7 +1,7 @@
 -- Run this ONLY if you already executed schema.sql once before (i.e. `vendors`
 -- table already exists without `category`/`city`). If you haven't deployed yet,
 -- ignore this file — schema.sql already includes these columns.
-USE queuewise;
+USE u281498814_queueit;
 
 ALTER TABLE vendors
   ADD COLUMN category VARCHAR(60) NOT NULL DEFAULT 'Other' AFTER slug,

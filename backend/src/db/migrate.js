@@ -20,7 +20,7 @@ async function migrate() {
   try {
     console.log('[migrate] Applying schema.sql ...');
     await connection.query(schema);
-    console.log('[migrate] Done. Database "queuewise" is ready.');
+    console.log('[migrate] Done. Database "queueit" is ready.');
   } finally {
     await connection.end();
   }

@@ -87,8 +87,8 @@ router.post('/verify-otp', verifyLimiter, async (req, res) => {
   const session = signSession({ type: 'patient', email: otp.email, name: patient.name }, '30d');
   res.cookie('qw_patient_session', session, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none',
+    secure: true,
     maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 
@@ -100,7 +100,7 @@ router.get('/me', attachPatient, (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('qw_patient_session');
+  res.clearCookie('qw_patient_session', { sameSite: 'none', secure: true });
   res.json({ ok: true });
 });
 

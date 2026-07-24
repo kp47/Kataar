@@ -80,8 +80,8 @@ router.post('/signup', async (req, res) => {
     const session = signSession({ type: 'vendor', vendorId, slug }, '7d');
     res.cookie('qw_vendor_session', session, {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'none',
+      secure: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.status(201).json({ vendorId, slug, businessName: businessName.trim() });
@@ -107,15 +107,15 @@ router.post('/login', async (req, res) => {
   const session = signSession({ type: 'vendor', vendorId: vendor.id, slug: vendor.slug }, '7d');
   res.cookie('qw_vendor_session', session, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'none',
+    secure: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
   res.json({ vendorId: vendor.id, slug: vendor.slug, businessName: vendor.business_name });
 });
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('qw_vendor_session');
+  res.clearCookie('qw_vendor_session', { sameSite: 'none', secure: true });
   res.json({ ok: true });
 });
 

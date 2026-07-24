@@ -1,8 +1,8 @@
--- QueueWise database schema
+-- queueit database schema
 -- Charset/collation chosen for full emoji/unicode safety in names & comments.
 
-CREATE DATABASE IF NOT EXISTS queuewise CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE queuewise;
+CREATE DATABASE IF NOT EXISTS u281498814_queueit CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE u281498814_queueit;
 
 -- ---------------------------------------------------------------------------
 -- VENDORS (the businesses: clinics, salons, service counters, etc.)
