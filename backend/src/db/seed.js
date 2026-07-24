@@ -6,9 +6,10 @@
 // before re-inserting, so `npm run seed` is idempotent.
 //
 // Run with: npm run seed
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const DEMO_PASSWORD = 'Demo@1234';
 

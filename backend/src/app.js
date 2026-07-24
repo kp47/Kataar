@@ -1,7 +1,8 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('express-async-errors'); // lets thrown errors in async route handlers reach the error middleware below
 
 const authRoutes = require('./routes/authRoutes');
